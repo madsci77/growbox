@@ -13,10 +13,10 @@ monitor the weight of the humidifier and calculate the reservoir's water level.
 
 My Modbus relays (at slave address 1) are configured as follows:
 
-1   Heater
-2   Humidifier
-3   Lights
-4   Exhaust fan
+1.   Heater
+2.   Humidifier
+3.   Lights
+4.   Exhaust fan
 
 Additionally, the control service uses a USB webcam to capture an image every
 5 minutes and saves old snapshots for later assembly into a time lapse video.
