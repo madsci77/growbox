@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mushroom Grow Box Control</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-light">
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="overview" role="tabpanel">
+    <!-- Overview content -->
+  </div>
+  <div class="tab-pane fade" id="history" role="tabpanel">
+    <!-- History content -->
+  </div>
+  <div class="tab-pane fade" id="config" role="tabpanel">
+    <!-- Config content -->
+  </div>
+</div>
+
+<div class="container-fluid py-4">
+  <div class="tab-pane fade show active" role="tabpanel" id="overview">
+    <div class="row">
+      <div class="col-md-6">
+	      <a href="/snapshot"><img id="cameraSnapshot" src="/snapshot" class="img-fluid border" alt="GrowBox Snapshot"></a>
+      </div>
+      <div class="col-md-6">
+        
+        <div class="row text-center mb-3 mt-5">
+          <div class="col">
+             <div>Temp</div>
+	     <div id="currentTemp" class="fw-bold">-- °F</div>
+	  </div>
+	  <div class="col">
+            <div>Humidity</div>
+	    <div id="currentHumidity" class="fw-bold">-- %</div>
+	  </div>
+          <div class="col">
+            <div>Heater</div>
+            <div id="heaterState" class="fw-bold text-danger">--</div>
+          </div>
+          <div class="col">
+            <div>Mist</div>
+            <div id="humidifierState" class="fw-bold text-danger">--</div>
+          </div>
+          <div class="col">
+            <div>Lights</div>
+            <div id="lightsState" class="fw-bold text-danger">--</div>
+          </div>
+          <div class="col">
+            <div>FAE Fan</div>
+            <div id="fanState" class="fw-bold text-danger">--</div>
+          </div>
+          <div class="col">
+            <div>Reservoir</div>
+            <div id="currentReservoir" class="fw-bold">--</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-12">
+            <canvas id="historyChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  
+  <!-- CONFIG TAB -->
+  <div class="row">
+    <form id="configForm" class="row g-3">
+      <div class="row">
+        <!-- Fan Durations -->
+        <div class="col-md-3">
+          <label for="fanOnDuration" class="form-label">Fan ON Duration (s)</label>
+          <input type="number" class="form-control" id="fanOnDuration">
+        </div>
+        <div class="col-md-3">
+          <label for="fanOffDuration" class="form-label">Fan OFF Duration (s)</label>
+          <input type="number" class="form-control" id="fanOffDuration">
+        </div>
+      
+        <!-- Heater Setpoints -->
+        <div class="col-md-3">
+          <label for="heaterOnTemp" class="form-label">Heater ON Temp (°F)</label>
+          <input type="number" step="0.1" class="form-control" id="heaterOnTemp">
+        </div>
+        <div class="col-md-3">
+          <label for="heaterOffTemp" class="form-label">Heater OFF Temp (°F)</label>
+          <input type="number" step="0.1" class="form-control" id="heaterOffTemp">
+        </div>
+      </div>
+
+      <div class="row"> 
+        <!-- Humidifier Settings -->
+         <div class="col-md-3">
+          <label for="humidifierInterval" class="form-label">Mist Interval (s)</label>
+          <input type="number" class="form-control" id="humidifierInterval">
+        </div>
+        <div class="col-md-3">
+          <label for="humidifierThreshold" class="form-label">Humidity Threshold (% RH)</label>
+          <input type="number" step="0.1" class="form-control" id="humidifierThreshold">
+        </div>
+       <div class="col-md-3">
+          <label for="humidifierOnTime" class="form-label">Mist On Time (s)</label>
+          <input type="number" class="form-control" id="humidifierOnTime">
+        </div>
+      </div>
+     
+      <div class="row">
+        <!-- Lights On/Off Times -->
+        <div class="col-md-3">
+          <label for="lightsOnTime" class="form-label">Lights ON Time (HH:MM)</label>
+          <input type="time" class="form-control" id="lightsOnTime">
+        </div>
+        <div class="col-md-3">
+          <label for="lightsOffTime" class="form-label">Lights OFF Time (HH:MM)</label>
+          <input type="time" class="form-control" id="lightsOffTime">
+        </div>
+      </div>
+      
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<script>
+
+let historyChart;
+
+// Convert C to F
+function cToF(c) {
+    return (c * 9/5) + 32;
+}
+// Convert F to C
+function fToC(f) {
+    return (f - 32) * 5/9;
+}
+
+const API_RELAYS = "/api/relays";       // was: http://localhost:5001/relays
+const API_SENSORS = "/api/sensors";     // was: http://localhost:5001/sensors
+const API_SNAPSHOT = "/snapshot";       // was: http://localhost:5002/snapshot
+const API_HISTORY = "/history";         // was: http://localhost:5002/history
+const API_CONFIG = "/config";           // was: http://localhost:5002/config
+const API_STATUS = "/status";           // was: http://localhost:5002/status"
+
+function updateOverview() {
+    // Fetch relay states
+    $.getJSON(API_RELAYS, function(data) {
+        let relays = data.relays;
+        let heater = relays.find(r => r.relay === 1).state;
+        let humidifier = relays.find(r => r.relay === 2).state;
+        let lights = relays.find(r => r.relay === 3).state;
+        let fan = relays.find(r => r.relay === 4).state;
+
+        $("#heaterState").text(heater ? "ON" : "OFF")
+          .toggleClass("text-success", heater)
+          .toggleClass("text-danger", !heater);
+
+        $("#humidifierState").text(humidifier ? "ON" : "OFF")
+          .toggleClass("text-success", humidifier)
+          .toggleClass("text-danger", !humidifier);
+
+        $("#lightsState").text(lights ? "ON" : "OFF")
+          .toggleClass("text-success", lights)
+          .toggleClass("text-danger", !lights);
+
+        $("#fanState").text(fan ? "ON" : "OFF")
+          .toggleClass("text-success", fan)
+          .toggleClass("text-danger", !fan);
+    });
+
+    // Fetch sensors
+    $.getJSON(API_SENSORS, function(data) {
+        let tempF = cToF(data.temperature).toFixed(1);
+        $("#currentTemp").text(tempF + " °F");
+        $("#currentHumidity").text(data.humidity.toFixed(1) + " %");
+    });
+
+    // Fetch status (reservoir)
+    $.getJSON(API_STATUS, function(data) {
+        $("#currentReservoir").text(data.status.reservoir + " %");
+    });
+}
+
+function updateHistory() {
+    $.getJSON(API_HISTORY, function(data) {
+        if (!historyChart) return;
+
+        let labels = data.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+        let tempsF = data.map(d => cToF(d.temperature));
+        let hums = data.map(d => d.humidity);
+
+        historyChart.data.labels = labels;
+        historyChart.data.datasets[0].data = tempsF;
+        historyChart.data.datasets[1].data = hums;
+        historyChart.update();
+    });
+}
+
+function loadConfig() {
+    $.getJSON(API_CONFIG, function(cfg) {
+        $("#fanOnDuration").val(cfg.fan_on_duration);
+        $("#fanOffDuration").val(cfg.fan_off_duration);
+        $("#heaterOnTemp").val((cToF(cfg.heater_on_temp)).toFixed(1));
+        $("#heaterOffTemp").val((cToF(cfg.heater_off_temp)).toFixed(1));
+        $("#humidifierInterval").val(cfg.humidifier_interval);
+        $("#humidifierOnTime").val(cfg.humidifier_on_time);
+        $("#humidifierThreshold").val(cfg.humidifier_threshold);
+        $("#lightsOnTime").val(cfg.lights_on_time);
+        $("#lightsOffTime").val(cfg.lights_off_time);
+    });
+}
+
+function saveConfig() {
+    let postData = {
+        fan_on_duration: parseInt($("#fanOnDuration").val(),10),
+        fan_off_duration: parseInt($("#fanOffDuration").val(),10),
+        heater_on_temp: fToC(parseFloat($("#heaterOnTemp").val())),
+        heater_off_temp: fToC(parseFloat($("#heaterOffTemp").val())),
+        humidifier_interval: parseInt($("#humidifierInterval").val(),10),
+        humidifier_on_time: parseInt($("#humidifierOnTime").val(),10),
+        humidifier_threshold: parseInt($("#humidifierThreshold").val(),10),
+        lights_on_time: $("#lightsOnTime").val(),
+        lights_off_time: $("#lightsOffTime").val()
+    };
+
+    $.ajax({
+        url: API_CONFIG,
+        type: "POST",
+        data: JSON.stringify(postData),
+        contentType: "application/json",
+        success: function() {
+            alert("Configuration saved successfully.");
+        },
+        error: function() {
+            alert("Failed to save configuration.");
+        }
+    });
+}
+
+$(document).ready(function() {
+    // Initialize Chart
+    const ctx = document.getElementById("historyChart").getContext('2d');
+    historyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Temperature (°F)',
+                    yAxisID: 'y1',
+                    data: [],
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    tension: 0.1,
+										pointRadius: 0
+                },
+                {
+                    label: 'Humidity (%)',
+                    yAxisID: 'y2',
+                    data: [],
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    tension: 0.1,
+										pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y1: {
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Temp (°F)'
+                    },
+										min: 65,
+										max: 90
+                },
+                y2: {
+                    type: 'linear',
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Humidity (%)'
+                    },
+										min: 0,
+										max: 100
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            }
+        }
+    });
+
+    // Initial data load
+    updateOverview();
+    updateHistory();
+    loadConfig();
+
+    // Periodic Updates
+    setInterval(updateOverview, 5000); // Update overview every 5 seconds
+    setInterval(updateHistory, 60000); // Update chart every 60 seconds
+
+    // Reload snapshot every 5 minutes
+    setInterval(function() {
+        $("#cameraSnapshot").attr("src", "/snapshot?" + new Date().getTime());
+    }, 300000);
+
+    // Handle config form
+    $("#configForm").on('submit', function(e) {
+        e.preventDefault();
+        saveConfig();
+    });
+});
+</script>
+</body>
+</html>

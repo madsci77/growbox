@@ -1,0 +1,35 @@
+server {
+  listen 80;
+  server_name _;
+
+  # Serve static files
+  root /var/www/growbox;
+  index index.html;
+
+  # Static file handlers
+  location / {
+    try_files $uri $uri/ =404;
+  }
+
+  # Reverse proxy to API on port 5001
+  location /api {
+    proxy_pass http://localhost:5001/;
+  }
+
+  # Reverse proxy to camera snapshot and history on port 5002
+  location /snapshot {
+    proxy_pass http://localhost:5002/snapshot;
+  }
+
+  location /history {
+    proxy_pass http://localhost:5002/history;
+  }
+
+  location /config {
+    proxy_pass http://localhost:5002/config;
+  }
+
+  location /status {
+    proxy_pass http://localhost:5002/status;
+  }
+}
